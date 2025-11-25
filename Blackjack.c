@@ -6,7 +6,7 @@
 #include <locale.h>
 #include <wchar.h>  // For wprintf and wchar_t
 #include <string.h>  // Added for memcpy
-#include <windows.h>
+#include <windows.h> // for Sleep
 
 #define RANKING 13
 #define SUIT    4
@@ -69,8 +69,7 @@ void PrintCardDealerFirst() {
 // Function to display the current game state
 void DisplayGameState(int showDealerFullHand) {
     system("cls");
-    printf("\n\n\n");
-    printf("/////////////////////////////////////////////////\n");
+    printf("/////////////////////////////////////////////////\n\n\n");
     
     if (showDealerFullHand) {
         printf("    Dealer's Hand: (%ipt)  ", Dealer.Points);
@@ -206,6 +205,11 @@ void Hit(int pool[SUIT][RANKING]){
     printf(" (Worth %i points)\n\n", CheckCardWorth(Player.Cards[Player.DeckSize-1]));
     Sleep(1500);
     if (Player.Points > 21){
+        system("cls");
+        DisplayGameState(0);
+        printf("Dealer reveals the second card\n\n");
+        Sleep(1000);
+        DisplayGameState(1);
         printf("Unfortunately you totalled %i, Bust!\n", Player.Points);
     } else {
         printf("Your total is now %i points\n", Player.Points);
