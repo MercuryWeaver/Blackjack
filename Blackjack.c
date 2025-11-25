@@ -5,6 +5,8 @@
 #include <process.h>             //Used for system("cls") command
 #include <locale.h>
 #include <wchar.h>  // For wprintf and wchar_t
+#include <string.h>  // Added for memcpy
+#include <windows.h>
 
 #define RANKING 13
 #define SUIT    4
@@ -12,7 +14,6 @@
 #define club    05                  //Used to print club symbol
 #define diamond 04               //Used to print diamond symbol
 #define heart   03                 //Used to print heart symbol
-#define RESULTS "Blackjack.txt"  //File name is Blackjack
 #define BLKB "\e[40m"
 
 //Initialize
@@ -32,6 +33,15 @@ Hand Player;
 Hand Dealer;
 const char* suits[] = {"♠", "♥", "♦", "♣"};
 const char* ranks[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
+
+// Function to reset the card pool
+void ResetPool(int pool[SUIT][RANKING]) {
+    for (int i = 0; i < SUIT; i++) {
+        for (int j = 0; j < RANKING; j++) {
+            pool[i][j] = j + 1;
+        }
+    }
+}
 
 void PrintCard(Hand Hand) {
     setlocale(LC_ALL, "en_US.UTF-8");
@@ -56,43 +66,60 @@ void PrintCardDealerFirst() {
     printf("\n\n\n");
 }
 
-void PrintFaceDown(){
-    setlocale(LC_ALL, "en_US.UTF-8");
+// Function to display the current game state
+void DisplayGameState(int showDealerFullHand) {
+    system("cls");
+    printf("\n\n\n");
+    printf("/////////////////////////////////////////////////\n");
     
-}
-
-int Pool[SUIT][RANKING] = 
-{
-    {1,2,3,4,5,6,7,8,9,10,11,12,13}, //SPADE 1
-    {1,2,3,4,5,6,7,8,9,10,11,12,13}, //HEART 2
-    {1,2,3,4,5,6,7,8,9,10,11,12,13}, //DIAMOND 3
-    {1,2,3,4,5,6,7,8,9,10,11,12,13}, //CLUBS 4
-};
-
-Card DrawCards(){
-    Card Card;
-    int PICK_SUIT = rand() % 3;
-    int PICK_RANK = rand() % 12;
-    if (Pool[PICK_SUIT][PICK_RANK] != 0){
-        Card.Rank = Pool[PICK_SUIT][PICK_RANK];
-        Card.Suit = PICK_SUIT+1;
-        Pool[PICK_SUIT][PICK_RANK] = 0; //Set to 0 so that we know its been taken
-        return Card;
+    if (showDealerFullHand) {
+        printf("    Dealer's Hand: (%ipt)  ", Dealer.Points);
+        PrintCard(Dealer);
     } else {
-        return DrawCards();             //Retry and draw another when it is 0
+        printf("    Dealer's Hand:         ");
+        PrintCardDealerFirst();
     }
+    
+    printf("\n\n\n");
+    printf("    Player's Hand: (%ipt)  ", Player.Points);
+    PrintCard(Player);
+    printf("/////////////////////////////////////////////////\n");
 }
-void Start_Game(){
+
+Card DrawCards(int pool[SUIT][RANKING]){
+    Card Card;
+    int PICK_SUIT, PICK_RANK;
+    
+    do {
+        PICK_SUIT = rand() % SUIT;
+        PICK_RANK = rand() % RANKING;
+    } while (pool[PICK_SUIT][PICK_RANK] == 0);
+    
+    Card.Rank = pool[PICK_SUIT][PICK_RANK];
+    Card.Suit = PICK_SUIT;
+    pool[PICK_SUIT][PICK_RANK] = 0; //Set to 0 so that we know its been taken
+    return Card;
+}
+
+void Start_Game(int pool[SUIT][RANKING]){
+    // Free existing cards if any
+    if (Player.Cards != NULL) {
+        free(Player.Cards);
+    }
+    if (Dealer.Cards != NULL) {
+        free(Dealer.Cards);
+    }
+    
     //Handles all the initializations needed
     Player.Cards = (Card*)malloc(2*sizeof(Card));
     for(int i = 0; i < 2; i++){
-        Player.Cards[i] = DrawCards();
+        Player.Cards[i] = DrawCards(pool);
     }
     Player.DeckSize = 2;
 
     Dealer.Cards = (Card*)malloc(2*sizeof(Card));
     for(int i = 0; i < 2; i++){
-        Dealer.Cards[i] = DrawCards();
+        Dealer.Cards[i] = DrawCards(pool);
     }
     Dealer.DeckSize = 2;
 
@@ -129,6 +156,7 @@ int CheckCardWorth(Card Card){
         }
     return Points;
 }
+
 //Updating points
 void Update_PLR_Points(){
     Player.Points = 0;
@@ -156,119 +184,132 @@ void Update_DLR_Points(){
     }
 }
 
-
-void Hit(){
+void Hit(int pool[SUIT][RANKING]){
     //This creates a temporary hand that is a copy of the player's hand
     //A single new card is then added to the new hand before the temporary hand replaces the player's hand
     printf("\nYou chose to hit\n");
+    Sleep(1000);
+    
     Hand Temp;
     Temp.Cards = (Card*)malloc((Player.DeckSize+1)*sizeof(Card));
     memcpy(Temp.Cards, Player.Cards, sizeof(Card)*Player.DeckSize);
-    Temp.Cards[Player.DeckSize] = DrawCards();
+    Temp.Cards[Player.DeckSize] = DrawCards(pool);
     Temp.DeckSize = Player.DeckSize+1;
     free(Player.Cards);
     Player = Temp;
     Update_PLR_Points();
     //End of drawing
 
-    printf("You drew\n");
+    DisplayGameState(0); // Show dealer's first card only
+    printf("You drew: ");
     Single_PrintCard(Player.Cards[Player.DeckSize-1]);
-    printf("Worth %i\n", CheckCardWorth(Player.Cards[Player.DeckSize-1]));
-
+    printf(" (Worth %i points)\n\n", CheckCardWorth(Player.Cards[Player.DeckSize-1]));
+    Sleep(1500);
     if (Player.Points > 21){
         printf("Unfortunately you totalled %i, Bust!\n", Player.Points);
-        system("pause");
-        exit(0);
     } else {
-        printf("Fortune has certainly smiled on you\n");
+        printf("Your total is now %i points\n", Player.Points);
     }
 }
 
-void Stay(){
-    Hand Temp;
-    Temp.Cards = (Card*)malloc((Dealer.DeckSize+1)*sizeof(Card));
-    memcpy(Temp.Cards, Dealer.Cards, sizeof(Card)*Dealer.DeckSize);
-    Temp.Cards[Dealer.DeckSize] = DrawCards();
-    Temp.DeckSize = Dealer.DeckSize+1;
-    free(Dealer.Cards);
-    Dealer = Temp;
-    Update_DLR_Points();
+void Stay(int pool[SUIT][RANKING]){
+    // First reveal dealer's second card
+    DisplayGameState(1); // Show dealer's full hand
+    printf("Dealer reveals the second card\n\n");
+    Sleep(2000);
+    
+    while (Dealer.Points < 17) {
+        Hand Temp;
+        Temp.Cards = (Card*)malloc((Dealer.DeckSize+1)*sizeof(Card));
+        memcpy(Temp.Cards, Dealer.Cards, sizeof(Card)*Dealer.DeckSize);
+        Temp.Cards[Dealer.DeckSize] = DrawCards(pool);
+        Temp.DeckSize = Dealer.DeckSize+1;
+        free(Dealer.Cards);
+        Dealer = Temp;
+        Update_DLR_Points();
 
-    printf("Dealer drew\n");
-    Single_PrintCard(Dealer.Cards[Dealer.DeckSize-1]);
-    printf("Worth %i\n", CheckCardWorth(Dealer.Cards[Dealer.DeckSize-1]));
-    printf("\n\n\n");
-    printf("/////////////////////////////////////////////////\n");
-    printf("    Dealer's Hand: (%ipt)  ", Dealer.Points);
-    PrintCard(Dealer);
-    printf("\n\n\n");
-    printf("    Player's Hand: (%ipt)  ", Player.Points);
-    PrintCard(Player);
+        DisplayGameState(1); // Show dealer's full hand
+        printf("Dealer drew: ");
+        Single_PrintCard(Dealer.Cards[Dealer.DeckSize-1]);
+        printf(" (Worth %i points)\n\n", CheckCardWorth(Dealer.Cards[Dealer.DeckSize-1]));
+        Sleep(2000);
 
+        if (Dealer.Points > 21) {
+            printf("Dealer Bust! You won!\n");
+            return;
+        }
+    }
+
+    DisplayGameState(1); // Final state
     if (Dealer.Points >= 17 && Dealer.Points < 22) {
-        //
         if (Dealer.Points > Player.Points){
-            printf("Dealer has won!\n", Player.Points);
-            system("pause");
-            exit(0);
+            printf("Dealer has %i, you have %i. Dealer wins!\n", Dealer.Points, Player.Points);
         } else if (Dealer.Points == Player.Points) {
-            printf("Push! it is a stalemate!\n", Player.Points);
-            system("pause");
-            exit(0);
+            printf("Both have %i. Push! It's a tie!\n", Player.Points);
         } else if (Dealer.Points < Player.Points){
-            printf("You won!", Player.Points);
-            system("pause");
-            exit(0);
+            printf("You have %i, dealer has %i. You win!\n", Player.Points, Dealer.Points);
         }
-    } else if (Dealer.Points > 21) {
-        printf("Dealer Bust! You won!\n", Player.Points);
-        system("pause");
-        exit(0);  
-    } else if ( Dealer.Points < 17) {
-        Stay();
     }
-
 }
 
-    void GameLoop(){
-        printf("\n\n\n");
-        printf("/////////////////////////////////////////////////\n");
-        printf("    Dealer's Hand:         ");
-        PrintCardDealerFirst();
-        printf("\n\n\n");
-        printf("    Player's Hand: (%ipt)  ", Player.Points);
-        PrintCard(Player);
-        printf("Choose your action: (s)Stay / (h)Hit ");
-        char Input;
-        scanf("%c", &Input);
+int GameLoop(int pool[SUIT][RANKING]){
+    DisplayGameState(0); // Show dealer's first card only    
+    printf("Choose your action: (s)Stay / (h)Hit ");
+    char Input;
+    scanf(" %c", &Input);  // Added space before %c to consume any leftover newline
 
-        switch (Input){
-            case 'h':
-                Hit();
-                GameLoop();
-                break;
-            case 's':
-
-                printf("\nYou chose to Stay\n");
-                printf("The Dealer will now reveal his second card\n\n");
-                printf("    Dealer's Hand: (%ipt)  ", Dealer.Points);
-                PrintCard(Dealer);
-                printf("\n/////////////////////////////////////////////////\n");
-                printf("The Dealer will now draw his cards\n");
-                Stay();
-                exit(0);
-            default:
-                printf("Invalid input!");
-                GameLoop();
-                break;
-        }
+    switch (Input){
+        case 'h':
+            Hit(pool);
+            if (Player.Points > 21) {
+                return 1; // Game over - player bust
+            }
+            return GameLoop(pool); // Continue game
+        case 's':
+            printf("\nYou chose to Stay\n");
+            Sleep(1000);
+            Stay(pool);
+            return 1; // Game over
+        default:
+            printf("Invalid input! Please try again.\n");
+            Sleep(1000);
+            return GameLoop(pool); // Continue game with new input
     }
+}
 
+void PlayGame() {
+    int pool[SUIT][RANKING];
+    ResetPool(pool);
+    
+    system("cls");
+    printf("    Game has started!   \n\n\n");
+    Sleep(1000);
+    printf("    Player and Dealer will now draw two cards each!   \n\n\n");
+    Sleep(1000);
+    Start_Game(pool);
+    GameLoop(pool);
+}
 
 int main(){
     srand(time(NULL));
-    printf("    Game has started!   \n\n\n");
-    printf("    Player and Dealer will now draw two cards each!   \n\n\n");
-    Start_Game();
-    GameLoop();
+    char playAgain;
+    
+    do {
+        PlayGame();
+        
+        printf("\n\nWould you like to play again? (y/n): ");
+        scanf(" %c", &playAgain);
+
+    } while (playAgain == 'y' || playAgain == 'Y');
+    
+    // Free any remaining allocated memory
+    if (Player.Cards != NULL) {
+        free(Player.Cards);
+    }
+    if (Dealer.Cards != NULL) {
+        free(Dealer.Cards);
+    }
+    
+    printf("Thanks for playing!\n");
+    return 0;
 }
